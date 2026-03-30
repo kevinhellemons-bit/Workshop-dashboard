@@ -153,6 +153,14 @@ def update_deployment(service):
 
 
 def run():
+    # In CI: schrijf credentials/token vanuit env vars naar bestanden (vóór checks)
+    creds_env = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    token_env = os.getenv("GOOGLE_TOKEN_JSON")
+    if creds_env:
+        CREDENTIALS.write_text(creds_env)
+    if token_env:
+        TOKEN_PATH.write_text(token_env)
+
     if not SCRIPT_ID:
         print("ERROR: APPS_SCRIPT_ID niet ingesteld in .env")
         print("  Voeg toe: APPS_SCRIPT_ID=jouw-script-id")
