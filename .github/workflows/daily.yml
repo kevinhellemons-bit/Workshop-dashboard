@@ -37,19 +37,9 @@ jobs:
       - name: Dashboard genereren
         run: python tools/generate_dashboard.py
 
-      - name: Debug secrets
-        env:
-          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
-        run: |
-          if [ -z "$APPS_SCRIPT_ID" ]; then
-            echo "APPS_SCRIPT_ID is LEEG — secret niet gevonden"
-          else
-            echo "APPS_SCRIPT_ID is ingesteld (lengte: ${#APPS_SCRIPT_ID})"
-          fi
-
       - name: Dashboard publiceren naar Apps Script
         env:
-          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+          APPS_SCRIPT_ID: "1gzVYcMinc-rU5XR5e0CKeht4_LUBie7sazllg6hywwuK3avMPZobmRhX"
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
         run: python tools/publish_to_apps_script.py
