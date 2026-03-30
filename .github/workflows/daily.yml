@@ -1,0 +1,65 @@
+name: Dagelijkse Dashboard Update
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC = 08:00 Amsterdam (zomer) / 07:00 (winter)
+  workflow_dispatch:       # Handmatig starten vanuit GitHub
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Dependencies installeren
+        run: pip install -r requirements.txt
+
+      - name: Workshops scrapen
+        run: python tools/scrape_workshops.py
+
+      - name: Database bijwerken
+        run: python tools/update_database.py
+
+      - name: Dashboard genereren
+        run: python tools/generate_dashboard.py
+
+      - name: Dashboard publiceren naar Apps Script
+        env:
+          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+        run: python tools/publish_to_apps_script.py
+
+      - name: Dagelijkse Slack digest versturen
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python tools/send_slack_digest.py
+
+      - name: Wekelijkse Slack digest versturen (alleen maandag)
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ "$(date +%u)" = "1" ]; then
+            echo "Maandag — wekelijks overzicht versturen..."
+            python tools/send_slack_weekly.py
+          else
+            echo "Geen maandag, wekelijks overzicht overgeslagen."
+          fi
+
+      - name: Database committen (trenddata bewaren)
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .tmp/workshops.db
+          git diff --staged --quiet || git commit -m "chore: database update $(date +%Y-%m-%d) [skip ci]"
+          git push

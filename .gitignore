@@ -1,0 +1,20 @@
+# Secrets — nooit committen
+.env
+credentials.json
+token.json
+token_apps_script.json
+
+# Tijdelijke bestanden (JSON scrape output)
+.tmp/*.json
+dashboard.html
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Database wél bijhouden (trenddata bewaard tussen runs)
+!.tmp/workshops.db
