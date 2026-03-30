@@ -1,4 +1,4 @@
-name: Dagelijkse Dashboard Update
+name: Dagelijks Dashboard Update
 
 on:
   schedule:
