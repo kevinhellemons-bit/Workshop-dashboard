@@ -37,22 +37,6 @@ jobs:
       - name: Dashboard genereren
         run: python tools/generate_dashboard.py
 
-      - name: Debug credentials
-        env:
-          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
-        run: |
-          if [ -z "$GOOGLE_CREDENTIALS_JSON" ]; then
-            echo "GOOGLE_CREDENTIALS_JSON is LEEG"
-          else
-            echo "GOOGLE_CREDENTIALS_JSON lengte: ${#GOOGLE_CREDENTIALS_JSON}"
-          fi
-          if [ -z "$GOOGLE_TOKEN_JSON" ]; then
-            echo "GOOGLE_TOKEN_JSON is LEEG"
-          else
-            echo "GOOGLE_TOKEN_JSON lengte: ${#GOOGLE_TOKEN_JSON}"
-          fi
-
       - name: Dashboard publiceren naar Apps Script
         env:
           APPS_SCRIPT_ID: "1gzVYcMinc-rU5XR5e0CKeht4_LUBie7sazllg6hywwuK3avMPZobmRhX"
