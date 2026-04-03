@@ -282,10 +282,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
   /* ── Urgency ── */
   .urgency-list { display: flex; flex-direction: column; gap: 6px; }
-  .urgency-item { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--yellow); border-radius: 4px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .urgency-item { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--yellow); border-radius: 4px; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .urgency-item-top { display: flex; justify-content: space-between; align-items: center; }
   .urgency-item .name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; text-transform: uppercase; letter-spacing: .5px; }
   .urgency-item .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .urgency-item .spots { font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 800; color: var(--yellow); }
+
+  /* ── Actiepunten ── */
+  .action-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .action-btn { padding: 5px 14px; font-size: 11px; border-radius: 12px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: all .15s; }
+  .action-btn:hover:not(.sel-marketing):not(.sel-klantenservice):not(.sel-retail) { border-color: var(--muted); color: var(--text); }
+  .action-btn.sel-marketing     { border-color: var(--blue);   color: var(--blue);   background: rgba(90,159,212,0.12); }
+  .action-btn.sel-klantenservice{ border-color: var(--red);    color: var(--red);    background: rgba(224,82,82,0.12); }
+  .action-btn.sel-retail        { border-color: var(--green);  color: var(--green);  background: rgba(76,175,116,0.12); }
+
+  /* ── Zwevende actiebalk ── */
+  .action-bar { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--orange); border-radius: 8px; padding: 14px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 4px 24px rgba(0,0,0,.5); z-index: 100; transition: opacity .2s, transform .2s; }
+  .action-bar.hidden { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(12px); }
+  .action-bar-count { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; color: var(--muted); white-space: nowrap; }
+  .action-bar-count strong { color: var(--orange); font-size: 20px; margin-right: 4px; }
+  .action-bar-send { padding: 9px 22px; background: var(--orange); color: #fff; border: none; border-radius: 4px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: background .15s; white-space: nowrap; }
+  .action-bar-send:hover:not(:disabled) { background: var(--orange2); }
+  .action-bar-send:disabled { opacity: .6; cursor: default; }
+  .action-bar-clear { padding: 9px 14px; background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
 
   /* ── Chart ── */
   .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 20px; }
@@ -370,35 +389,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Session table -->
-  <div class="section-label">Alle Aankomende Sessies</div>
-  <div class="filter-row">
-    <select id="filterLoc" onchange="renderTable()">
-      <option value="">Alle locaties</option>
-    </select>
-    <select id="filterWorkshop" onchange="renderTable()">
-      <option value="">Alle workshops</option>
-    </select>
-    <button class="filter-btn active" data-s="" onclick="setStatusFilter(this,'')">Alles</button>
-    <button class="filter-btn" data-s="vol"    onclick="setStatusFilter(this,'vol')">Volzet</button>
-    <button class="filter-btn" data-s="hoog"   onclick="setStatusFilter(this,'hoog')">Hoog &ge;75%</button>
-    <button class="filter-btn" data-s="midden" onclick="setStatusFilter(this,'midden')">Midden 50-74%</button>
-    <button class="filter-btn" data-s="laag"   onclick="setStatusFilter(this,'laag')">Laag &lt;50%</button>
-  </div>
-  <div class="table-container">
-    <div class="table-wrap">
-      <table id="sessionTable">
-        <thead>
-          <tr>
-            <th>Datum</th><th>Tijd</th><th>Workshop</th><th>Locatie</th>
-            <th>Geboekt</th><th>Vrij</th><th>Bezetting</th><th>Status</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-
   <!-- Urgency -->
   <div class="section-label">Actie Nodig — Sessies &lt; 21 Dagen met &gt;14 Vrije Plekken</div>
   <div class="urgency-list" id="urgencyList"></div>
@@ -433,7 +423,43 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Session table -->
+  <div class="section-label">Alle Aankomende Sessies</div>
+  <div class="filter-row">
+    <select id="filterLoc" onchange="renderTable()">
+      <option value="">Alle locaties</option>
+    </select>
+    <select id="filterWorkshop" onchange="renderTable()">
+      <option value="">Alle workshops</option>
+    </select>
+    <button class="filter-btn active" data-s="" onclick="setStatusFilter(this,'')">Alles</button>
+    <button class="filter-btn" data-s="vol"    onclick="setStatusFilter(this,'vol')">Volzet</button>
+    <button class="filter-btn" data-s="hoog"   onclick="setStatusFilter(this,'hoog')">Hoog &ge;75%</button>
+    <button class="filter-btn" data-s="midden" onclick="setStatusFilter(this,'midden')">Midden 50-74%</button>
+    <button class="filter-btn" data-s="laag"   onclick="setStatusFilter(this,'laag')">Laag &lt;50%</button>
+  </div>
+  <div class="table-container">
+    <div class="table-wrap">
+      <table id="sessionTable">
+        <thead>
+          <tr>
+            <th>Datum</th><th>Tijd</th><th>Workshop</th><th>Locatie</th>
+            <th>Geboekt</th><th>Vrij</th><th>Bezetting</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
 </main>
+
+<!-- Zwevende actiebalk -->
+<div class="action-bar hidden" id="actionBar">
+  <div class="action-bar-count"><strong id="actionCount">0</strong> actiepunt(en) klaar</div>
+  <button class="action-bar-clear" onclick="clearActions()">Wissen</button>
+  <button class="action-bar-send" id="actionSendBtn" onclick="sendActions()">Verstuur naar Slack &rarr;</button>
+</div>
 
 <script>
 const DATA = __DATA__;
@@ -639,6 +665,7 @@ function renderEmptySessions() {
         <div class="ename">${s.workshop_name}</div>
         <div class="emeta">${dateNl} &mdash; ${s.session_time} &mdash; ${s.location} (${s.country})</div>
         <div class="edays" style="color:${urgColor}">Over ${daysUntil} dagen</div>
+        ${actionBtnsHtml(s)}
       </div>
     `;
   }).join('');
@@ -719,11 +746,14 @@ function renderUrgency() {
     const dateNl = new Date(u.session_date).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
     return `
       <div class="urgency-item">
-        <div>
-          <div class="name">${u.workshop_name}</div>
-          <div class="meta">${dateNl} &mdash; ${u.session_time} &mdash; ${u.location}</div>
+        <div class="urgency-item-top">
+          <div>
+            <div class="name">${u.workshop_name}</div>
+            <div class="meta">${dateNl} &mdash; ${u.session_time} &mdash; ${u.location}</div>
+          </div>
+          <div class="spots">${u.available_spots} <span style="font-size:13px;color:var(--muted)">vrij</span></div>
         </div>
-        <div class="spots">${u.available_spots} <span style="font-size:13px;color:var(--muted)">vrij</span></div>
+        ${actionBtnsHtml(u)}
       </div>
     `;
   }).join('');
@@ -758,17 +788,128 @@ function renderSuggestions() {
   }).join('');
 }
 
+// ── Actiepunten ───────────────────────────────────────────────────────
+const ACTIONS = [
+  { id: 'marketing',      label: 'Marketing Push',           cls: 'sel-marketing',      emoji: '[M]' },
+  { id: 'klantenservice', label: 'Annuleren',                cls: 'sel-klantenservice', emoji: '[K]' },
+  { id: 'retail',         label: 'Andere Workshop in Plaats',cls: 'sel-retail',         emoji: '[R]' },
+];
+
+const sessionStore = [];          // indexed array of session objects
+const pending = new Map();        // idx → Set of action IDs
+
+function registerSession(s) {
+  sessionStore.push(s);
+  return sessionStore.length - 1;
+}
+
+function actionBtnsHtml(s) {
+  const idx = registerSession(s);
+  return '<div class="action-btns">' + ACTIONS.map(function(a) {
+    return '<button class="action-btn" data-idx="' + idx + '" data-action="' + a.id + '" onclick="toggleAction(this)">' + a.label + '</button>';
+  }).join('') + '</div>';
+}
+
+function toggleAction(btn) {
+  const idx = parseInt(btn.dataset.idx, 10);
+  const actionId = btn.dataset.action;
+  const act = ACTIONS.find(function(a) { return a.id === actionId; });
+  if (!pending.has(idx)) pending.set(idx, new Set());
+  const set = pending.get(idx);
+  if (set.has(actionId)) {
+    set.delete(actionId);
+    btn.classList.remove(act.cls);
+    if (set.size === 0) pending.delete(idx);
+  } else {
+    set.add(actionId);
+    btn.classList.add(act.cls);
+  }
+  updateBar();
+}
+
+function updateBar() {
+  const total = [...pending.values()].reduce((s, v) => s + v.size, 0);
+  document.getElementById('actionCount').textContent = total;
+  document.getElementById('actionBar').classList.toggle('hidden', total === 0);
+}
+
+function clearActions() {
+  pending.clear();
+  document.querySelectorAll('.action-btn').forEach(b =>
+    ACTIONS.forEach(a => b.classList.remove(a.cls))
+  );
+  updateBar();
+}
+
+function sendActions() {
+  const payload = [];
+  pending.forEach((set, idx) => {
+    const s = sessionStore[idx];
+    if (!s) return;
+    set.forEach(actionId => {
+      const act = ACTIONS.find(a => a.id === actionId);
+      payload.push({
+        workshop: s.workshop_name, location: s.location,
+        date: s.session_date, time: s.session_time,
+        available_spots: s.available_spots || 0,
+        action_id: actionId, action_label: act.label, action_emoji: act.emoji,
+      });
+    });
+  });
+  if (!payload.length) return;
+
+  const btn = document.getElementById('actionSendBtn');
+  btn.disabled = true;
+  btn.textContent = 'Versturen\u2026';
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      btn.disabled = false;
+      btn.textContent = 'Verstuur naar Slack \u2192';
+      if (result && result.ok && result.sent > 0) {
+        clearActions();
+        showToast('\u2713 ' + result.sent + ' actiepunt' + (result.sent !== 1 ? 'en' : '') + ' verstuurd naar Slack');
+      } else if (result && result.ok && result.missing && result.missing.length > 0) {
+        showToast('\u26a0 SLACK_BOT_TOKEN ontbreekt in Apps Script (Projectinstellingen \u2192 Script-eigenschappen)', true);
+      } else if (result && !result.ok) {
+        showToast('\u26a0 Fout: ' + (result.error || 'onbekend'), true);
+      } else {
+        showToast('\u26a0 Geen reactie van Apps Script', true);
+      }
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.textContent = 'Verstuur naar Slack \u2192';
+      showToast('\u26a0 Fout: ' + err.message, true);
+    })
+    .sendSlackActions(JSON.stringify({ actions: payload }));
+}
+
+function showToast(msg, isError = false) {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;top:24px;right:24px;background:${isError ? 'var(--red)' : 'var(--green)'};color:#fff;padding:12px 20px;border-radius:4px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;z-index:200;letter-spacing:.5px;box-shadow:0 4px 12px rgba(0,0,0,.3)`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
-populateFilters();
-renderKPIs();
-renderLocations();
-renderTrend();
-renderWorkshopTable();
-renderTable();
-renderUrgency();
-renderEmptySessions();
-renderSuggestions();
-renderPopularity();
+try {
+  populateFilters();
+  renderKPIs();
+  renderLocations();
+  renderTrend();
+  renderWorkshopTable();
+  renderTable();
+  renderUrgency();
+  renderEmptySessions();
+  renderSuggestions();
+  renderPopularity();
+} catch(e) {
+  document.body.insertAdjacentHTML('afterbegin',
+    '<div style="background:#e05252;color:#fff;padding:16px 24px;font-family:monospace;font-size:13px;position:fixed;top:0;left:0;right:0;z-index:999">JS FOUT: ' + e.message + ' — ' + e.stack + '</div>'
+  );
+}
 </script>
 </body>
 </html>"""

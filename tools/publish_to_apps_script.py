@@ -68,6 +68,46 @@ DO_GET = (
     "    .setTitle('BBQ Experience Center \u2013 Dashboard')\n"
     "    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);\n"
     "}\n"
+    "\n"
+    "function sendSlackActions(jsonStr) {\n"
+    "  try {\n"
+    "    var data = JSON.parse(jsonStr);\n"
+    "    var actions = data.actions || [];\n"
+    "    var props = PropertiesService.getScriptProperties();\n"
+    "    var token = props.getProperty('SLACK_BOT_TOKEN');\n"
+    "    var channels = { marketing: '#marketing', klantenservice: '#klantenservice', retail: '#support-team-retail' };\n"
+    "    var labels   = { marketing: 'Marketing Push', klantenservice: 'Annuleren', retail: 'Andere Workshop in Plaats' };\n"
+    "    var emojis   = { marketing: '\U0001F4E3', klantenservice: '\u274C', retail: '\U0001F504' };\n"
+    "    var byChannel = {};\n"
+    "    actions.forEach(function(a) {\n"
+    "      if (!byChannel[a.action_id]) byChannel[a.action_id] = [];\n"
+    "      byChannel[a.action_id].push(a);\n"
+    "    });\n"
+    "    var sent = 0; var missing = [];\n"
+    "    Object.keys(byChannel).forEach(function(ch) {\n"
+    "      if (!token) { missing.push(ch); return; }\n"
+    "      var items = byChannel[ch];\n"
+    "      var lines = items.map(function(a) {\n"
+    "        var spots = a.available_spots ? ' \u2014 `' + a.available_spots + ' vrij`' : '';\n"
+    "        return '\u2022 *' + a.workshop + '* \u2014 ' + a.location + ' \u2014 ' + a.date + ' ' + a.time + spots;\n"
+    "      });\n"
+    "      var blocks = [\n"
+    "        { type: 'header', text: { type: 'plain_text', text: emojis[ch] + ' Actiepunt: ' + labels[ch] } },\n"
+    "        { type: 'section', text: { type: 'mrkdwn', text: '*' + items.length + ' sessie' + (items.length > 1 ? 's' : '') + ':*\\n' + lines.join('\\n') } },\n"
+    "        { type: 'context', elements: [{ type: 'mrkdwn', text: 'BBQ Experience Center \u00b7 Dashboard actiepunt' }] }\n"
+    "      ];\n"
+    "      UrlFetchApp.fetch('https://slack.com/api/chat.postMessage', {\n"
+    "        method: 'post', contentType: 'application/json',\n"
+    "        headers: { Authorization: 'Bearer ' + token },\n"
+    "        payload: JSON.stringify({ channel: channels[ch], blocks: blocks })\n"
+    "      });\n"
+    "      sent += items.length;\n"
+    "    });\n"
+    "    return { ok: true, sent: sent, missing: missing };\n"
+    "  } catch (err) {\n"
+    "    return { ok: false, error: err.message };\n"
+    "  }\n"
+    "}\n"
 )
 
 MANIFEST = json.dumps({
@@ -127,7 +167,7 @@ def update_deployment(service):
 
     if target:
         dep_id = target["deploymentId"]
-        service.projects().deployments().update(
+        result = service.projects().deployments().update(
             scriptId=SCRIPT_ID,
             deploymentId=dep_id,
             body={
@@ -139,6 +179,10 @@ def update_deployment(service):
             },
         ).execute()
         print(f"  Deployment bijgewerkt (versie {version_number})")
+        entry_points = result.get("entryPoints", [])
+        for ep in entry_points:
+            if ep.get("entryPointType") == "WEB_APP":
+                print(f"  Deployment URL: {ep['webApp']['url']}")
     else:
         # Geen bestaande deployment — maak nieuwe aan
         dep = service.projects().deployments().create(
@@ -149,7 +193,12 @@ def update_deployment(service):
                 "description": "Dashboard",
             },
         ).execute()
-        print(f"  Nieuwe deployment aangemaakt: {dep.get('deploymentId')}")
+        dep_id = dep.get("deploymentId")
+        print(f"  Nieuwe deployment aangemaakt: {dep_id}")
+        entry_points = dep.get("entryPoints", [])
+        for ep in entry_points:
+            if ep.get("entryPointType") == "WEB_APP":
+                print(f"  Deployment URL: {ep['webApp']['url']}")
 
 
 def run():
