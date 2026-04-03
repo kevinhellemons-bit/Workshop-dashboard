@@ -220,8 +220,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .logo-mark { width: 44px; height: 44px; background: var(--orange); display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 16px; color: #fff; flex-shrink: 0; letter-spacing: 1px; }
   .logo-text h1 { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 22px; text-transform: uppercase; letter-spacing: 1px; line-height: 1; }
   .logo-text span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; }
-  .header-right { margin-left: auto; text-align: right; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .header-right { margin-left: auto; text-align: right; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
   .header-right strong { display: block; font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: 0; text-transform: none; margin-top: 2px; }
+  .refresh-btn { background: var(--orange); color: #fff; border: none; border-radius: 4px; padding: 5px 14px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: .5px; text-transform: uppercase; cursor: pointer; }
+  .refresh-btn:disabled { opacity: .6; cursor: default; }
 
   /* ── Layout ── */
   main { padding: 24px; max-width: 1400px; margin: 0 auto; }
@@ -350,8 +352,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <span>Bezettingsgraad Dashboard &mdash; Workshops</span>
   </div>
   <div class="header-right">
-    Bijgewerkt op
-    <strong id="genDate"></strong>
+    <div>Bijgewerkt op<strong id="genDate"></strong></div>
+    <button class="refresh-btn" id="refreshBtn" onclick="triggerRefresh()">&#8635; Vernieuwen</button>
   </div>
 </header>
 
@@ -677,6 +679,29 @@ function badgeForPct(pct) {
   if (pct >=  75) return ['hoog',  'badge-high', 'Hoog'];
   if (pct >=  50) return ['midden','badge-mid',  'Midden'];
   return ['laag', 'badge-low', 'Laag'];
+}
+
+// ── Vernieuwen via GitHub Actions ─────────────────────────────────────────
+function triggerRefresh() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = 'Bezig\u2026';
+  google.script.run
+    .withSuccessHandler(function(result) {
+      btn.disabled = false;
+      btn.innerHTML = '&#8635; Vernieuwen';
+      if (result && result.ok) {
+        showToast('\u2713 Update gestart — duurt ca. 2 minuten');
+      } else {
+        showToast('\u26a0 ' + (result ? result.error : 'Geen reactie'), true);
+      }
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = '&#8635; Vernieuwen';
+      showToast('\u26a0 Fout: ' + err.message, true);
+    })
+    .triggerWorkflow();
 }
 
 // ── Populate filter dropdowns dynamically ─────────────────────────────────
