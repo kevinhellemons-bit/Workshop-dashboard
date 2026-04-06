@@ -2,8 +2,8 @@ name: Dagelijks Dashboard Update
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # 06:00 UTC = 08:00 Amsterdam (zomer) / 07:00 (winter)
-  workflow_dispatch:       # Handmatig starten vanuit GitHub
+    - cron: '0 6,9,12,15,18 * * *'   # Elke 3 uur tussen 08:00–20:00 Amsterdam
+  workflow_dispatch:       # Handmatig starten vanuit GitHub (of via dashboard-knop)
 
 permissions:
   contents: write          # Nodig voor git push van workshops.db
@@ -44,22 +44,28 @@ jobs:
           GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
         run: python tools/publish_to_apps_script.py
 
-      - name: Dagelijkse Slack digest versturen
-        continue-on-error: true
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: python tools/send_slack_digest.py
-
-      - name: Wekelijkse Slack digest versturen (alleen maandag)
+      - name: Dagelijkse Slack digest versturen (alleen 06:00 UTC)
         continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ "$(date +%u)" = "1" ]; then
-            echo "Maandag — wekelijks overzicht versturen..."
+          if [ "$(date +%H)" = "06" ]; then
+            echo "Ochtendrun — dagelijkse digest versturen..."
+            python tools/send_slack_digest.py
+          else
+            echo "Geen ochtendrun, Slack digest overgeslagen."
+          fi
+
+      - name: Wekelijkse Slack digest versturen (alleen maandag 06:00 UTC)
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ "$(date +%u)" = "1" ] && [ "$(date +%H)" = "06" ]; then
+            echo "Maandag ochtend — wekelijks overzicht versturen..."
             python tools/send_slack_weekly.py
           else
-            echo "Geen maandag, wekelijks overzicht overgeslagen."
+            echo "Niet maandag ochtend, wekelijks overzicht overgeslagen."
           fi
 
       - name: Database committen (trenddata bewaren)
