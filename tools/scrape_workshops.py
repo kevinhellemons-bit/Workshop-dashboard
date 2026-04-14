@@ -84,14 +84,26 @@ HEADERS = {
     "Accept-Language": "nl-NL,nl;q=0.9",
 }
 
-# Matches: #2026-03-27##18:00###0  or  #2026-03-27##18:00###6
+# Elke locatie heeft een vaste location_id in het TBW booking systeem
+LOCATION_ID_MAP = {
+    "Roosendaal": "1",
+    "Nunspeet":   "2",
+    "Herent":     "4",
+}
+
+# Haalt slot-objecten op met hun location_id uit de HTML
+SLOT_WITH_LOC_PATTERN = re.compile(
+    r'"location_id"\s*:\s*(\d+)[^{}]{0,500}"option_label"\s*:\s*"#(\d{4}-\d{2}-\d{2})##(\d{2}:\d{2})###(\d+)"'
+)
+
+# Fallback patroon (geen location_id context)
 SESSION_PATTERN = re.compile(
     r"#(\d{4}-\d{2}-\d{2})##(\d{2}:\d{2})###(\d+)"
 )
 
 
-def fetch_sessions(url: str) -> list[dict]:
-    """Fetch a workshop page and extract session slots."""
+def fetch_sessions(url: str, location: str = "") -> list[dict]:
+    """Fetch a workshop page and extract session slots for the given location."""
     try:
         resp = requests.get(url, headers=HEADERS, timeout=20)
         resp.raise_for_status()
@@ -100,27 +112,26 @@ def fetch_sessions(url: str) -> list[dict]:
         return []
 
     html = resp.text
-    matches = SESSION_PATTERN.findall(html)
+    target_loc_id = LOCATION_ID_MAP.get(location)
 
-    if not matches:
-        # Fallback: try alternative JSON-like format from WooCommerce script tags
-        matches = _try_json_fallback(html)
-
-    # Stop bij de eerste duplicate datum+tijd: de HTML bevat de publieke
-    # boekingskalender-slots eerst, daarna herhaalt een tweede JS-object
-    # dezelfde slots (inclusief extra groepsboekings-slots). Zodra een
-    # datum+tijd voor de tweede keer verschijnt zijn we in het tweede object.
-    seen_slots = set()
-    unique_matches = []
-    for m in matches:
-        key = (m[0], m[1])  # (datum, tijd)
-        if key in seen_slots:
-            break  # tweede batch begint — stop
-        seen_slots.add(key)
-        unique_matches.append(m)
+    # Primair: filter op location_id zodat alleen de juiste locatie-slots worden gelezen
+    if target_loc_id:
+        slot_matches = SLOT_WITH_LOC_PATTERN.findall(html)
+        filtered = [(d, t, s) for loc_id, d, t, s in slot_matches if loc_id == target_loc_id]
+        # Dedupliceer (zelfde datum+tijd kan meerdere keren voorkomen)
+        seen = set()
+        matches = []
+        for d, t, s in filtered:
+            if (d, t) not in seen:
+                seen.add((d, t))
+                matches.append((d, t, s))
+    else:
+        matches = SESSION_PATTERN.findall(html)
+        if not matches:
+            matches = _try_json_fallback(html)
 
     sessions = []
-    for date_str, time_str, spots_str in unique_matches:
+    for date_str, time_str, spots_str in matches:
         available = int(spots_str)
         booked = TOTAL_CAPACITY - available
         sessions.append({
@@ -165,7 +176,7 @@ def run():
 
     for i, (url, name, location, country, price) in enumerate(WORKSHOP_URLS, 1):
         print(f"  [{i:02d}/{len(WORKSHOP_URLS)}] {name} – {location}... ", end="", flush=True)
-        sessions = fetch_sessions(url)
+        sessions = fetch_sessions(url, location)
         print(f"{len(sessions)} sessies gevonden")
 
         if not sessions:
