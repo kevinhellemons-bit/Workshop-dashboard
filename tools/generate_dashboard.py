@@ -89,13 +89,13 @@ def build_data(conn):
         ) w ON t.location = w.location
     """, (today, week_ago))
 
-    # Urgency: upcoming sessions within 21 days with >14 spots free
+    # Urgency: upcoming sessions within 21 days with >7 tables free
     urgency = query(conn, """
         SELECT workshop_name, location, session_date, session_time,
                available_spots, occupancy_pct
         FROM sessions
         WHERE session_date >= ? AND session_date <= ?
-          AND available_spots > 14
+          AND available_spots > 7
         ORDER BY session_date, session_time
     """, (today, in_21days))
 
@@ -383,7 +383,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <th>Sessies</th>
             <th>Gem. bezetting</th>
             <th>Totaal geboekt</th>
-            <th>Totaal plekken</th>
+            <th>Totaal tafels</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -392,7 +392,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <!-- Urgency -->
-  <div class="section-label">Actie Nodig — Sessies &lt; 21 Dagen met &gt;14 Vrije Plekken</div>
+  <div class="section-label">Actie Nodig — Sessies &lt; 21 Dagen met &gt;7 Vrije Tafels</div>
   <div class="urgency-list" id="urgencyList"></div>
 
   <!-- Empty sessions 6 weeks -->
@@ -446,7 +446,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <thead>
           <tr>
             <th>Datum</th><th>Tijd</th><th>Workshop</th><th>Locatie</th>
-            <th>Geboekt</th><th>Vrij</th><th>Bezetting</th><th>Status</th>
+            <th>Tafels geboekt</th><th>Tafels vrij</th><th>Bezetting</th><th>Status</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -479,11 +479,11 @@ function renderKPIs() {
   const fullCount = DATA.full_sessions_count;
 
   const kpis = [
-    { label: 'Totale bezettingsgraad', value: overallPct + '%', sub: `${totalBooked.toLocaleString('nl-NL')} / ${totalCap.toLocaleString('nl-NL')} plekken`, cls: overallPct >= 70 ? 'green' : overallPct >= 40 ? 'yellow' : 'blue' },
+    { label: 'Totale bezettingsgraad', value: overallPct + '%', sub: `${totalBooked.toLocaleString('nl-NL')} / ${totalCap.toLocaleString('nl-NL')} tafels geboekt`, cls: overallPct >= 70 ? 'green' : overallPct >= 40 ? 'yellow' : 'blue' },
     { label: 'Aankomende sessies',     value: totalSessions,    sub: 'workshops gepland', cls: '' },
     { label: 'Volzet',                 value: fullCount,         sub: 'sessies volledig geboekt', cls: 'green' },
-    { label: 'Omzetprognose',          value: '€' + Math.round(revForecast).toLocaleString('nl-NL'), sub: 'geboekte plekken × prijs', cls: 'orange' },
-    { label: 'Actie nodig',            value: DATA.urgency.length, sub: '< 14 dagen, >10 plekken vrij', cls: DATA.urgency.length > 0 ? 'red' : 'green' },
+    { label: 'Omzetprognose',          value: '€' + Math.round(revForecast).toLocaleString('nl-NL'), sub: 'geboekte tafels × prijs', cls: 'orange' },
+    { label: 'Actie nodig',            value: DATA.urgency.length, sub: '< 21 dagen, >7 tafels vrij', cls: DATA.urgency.length > 0 ? 'red' : 'green' },
   ];
 
   const grid = document.getElementById('kpiGrid');
@@ -554,7 +554,7 @@ function renderTrend() {
     data: {
       labels,
       datasets: [{
-        label: 'Totaal geboekte plekken',
+        label: 'Totaal geboekte tafels',
         data: values,
         borderColor: '#e8722a',
         backgroundColor: 'rgba(232,114,42,0.12)',
@@ -651,7 +651,7 @@ function renderEmptySessions() {
   const summary = document.getElementById('emptySummary');
   const items = DATA.empty_sessions;
 
-  summary.textContent = `${items.length} sessie${items.length !== 1 ? 's' : ''} in de komende 6 weken hebben nog geen enkele boeking (0/20 plekken bezet).`;
+  summary.textContent = `${items.length} sessie${items.length !== 1 ? 's' : ''} in de komende 6 weken hebben nog geen enkele boeking (0/20 tafels bezet).`;
 
   if (!items.length) {
     grid.innerHTML = `<p style="color:var(--muted);padding:20px 0;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:1px;font-size:13px">Geen volledig lege sessies</p>`;
@@ -776,7 +776,7 @@ function renderUrgency() {
             <div class="name">${u.workshop_name}</div>
             <div class="meta">${dateNl} &mdash; ${u.session_time} &mdash; ${u.location}</div>
           </div>
-          <div class="spots">${u.available_spots} <span style="font-size:13px;color:var(--muted)">vrij</span></div>
+          <div class="spots">${u.available_spots} <span style="font-size:13px;color:var(--muted)">tafels vrij</span></div>
         </div>
         ${actionBtnsHtml(u)}
       </div>
@@ -805,7 +805,7 @@ function renderSuggestions() {
           <div class="si"><div class="sk">Populariteitsscore</div><strong style="color:${color}">${score} <span style="font-size:11px;color:var(--muted);font-weight:400">/100</span></strong></div>
           <div class="si"><div class="sk">Gem. bezetting</div><strong style="color:${gaugeColor(s.avg_occupancy)}">${s.avg_occupancy}%</strong></div>
           <div class="si"><div class="sk">Sessies volzet</div><strong>${fullPct}%</strong></div>
-          <div class="si"><div class="sk">Vrije plekken</div><strong style="color:var(--green)">${s.available_spots}</strong></div>
+          <div class="si"><div class="sk">Tafels vrij</div><strong style="color:var(--green)">${s.available_spots}</strong></div>
         </div>
         <div class="sug-next">Eerstvolgende beschikbare sessie: <strong>${nextDate} om ${s.session_time}</strong></div>
       </div>

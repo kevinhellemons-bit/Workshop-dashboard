@@ -62,7 +62,7 @@ def build_message() -> dict:
     urgency = query(conn, """
         SELECT workshop_name, location, session_date, session_time, available_spots
         FROM sessions
-        WHERE session_date >= ? AND session_date <= ? AND available_spots > 14
+        WHERE session_date >= ? AND session_date <= ? AND available_spots > 7
         ORDER BY session_date, session_time
         LIMIT 5
     """, (today, in_21))
@@ -113,7 +113,7 @@ def build_message() -> dict:
         week_delta = f"+{t_book - w_book}" if w_book is not None and t_book > w_book else (f"{t_book - w_book}" if w_book is not None else "–")
 
         loc_lines.append(
-            f"{emoji} *{name}* ({loc['country']})  `{pct}%`  –  {booked}/{cap} plekken\n"
+            f"{emoji} *{name}* ({loc['country']})  `{pct}%`  –  {booked}/{cap} tafels geboekt\n"
             f"   ↑ Dag: {day_delta}  |  Week: {week_delta}"
         )
 
@@ -125,9 +125,9 @@ def build_message() -> dict:
     # Urgency
     if urgency:
         blocks.append({"type": "divider"})
-        urg_lines = ["*⚠️ Actie nodig – sessies < 21 dagen met >14 plekken vrij:*"]
+        urg_lines = ["*⚠️ Actie nodig – sessies < 21 dagen met >7 tafels vrij:*"]
         for u in urgency:
-            urg_lines.append(f"• *{u['workshop_name']}* – {u['session_date']} {u['session_time']} ({u['location']}) – `{u['available_spots']} vrij`")
+            urg_lines.append(f"• *{u['workshop_name']}* – {u['session_date']} {u['session_time']} ({u['location']}) – `{u['available_spots']} tafels vrij`")
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": "\n".join(urg_lines)}

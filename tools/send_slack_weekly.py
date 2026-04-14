@@ -1,6 +1,6 @@
 """
 Stuurt elke maandag een Slack-bericht met de "Actie nodig" sessies:
-aankomende sessies binnen 21 dagen met meer dan 14 vrije plekken.
+aankomende sessies binnen 21 dagen met meer dan 7 vrije tafels.
 Requires SLACK_WEBHOOK_URL in .env
 """
 
@@ -54,7 +54,7 @@ def build_message() -> dict:
                available_spots, total_capacity, occupancy_pct
         FROM sessions
         WHERE session_date >= ? AND session_date <= ?
-          AND available_spots > 14
+          AND available_spots > 7
         ORDER BY session_date, session_time, location
     """, (today, in_21))
 
@@ -78,7 +78,7 @@ def build_message() -> dict:
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    f"Week van *{week_nl}* — sessies in de komende 21 dagen met meer dan 14 vrije plekken.\n"
+                    f"Week van *{week_nl}* — sessies in de komende 21 dagen met meer dan 7 vrije tafels.\n"
                     f"Totale bezettingsgraad alle vestigingen: `{overall_pct}%`"
                 )
             }
@@ -89,7 +89,7 @@ def build_message() -> dict:
     if not urgency:
         blocks.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": "✅ Geen sessies met meer dan 14 vrije plekken in de komende 21 dagen. Goed bezig!"}
+            "text": {"type": "mrkdwn", "text": "✅ Geen sessies met meer dan 7 vrije tafels in de komende 21 dagen. Goed bezig!"}
         })
     else:
         # Group by location
@@ -105,7 +105,7 @@ def build_message() -> dict:
                 bar = "🔴" if days_until <= 7 else ("🟡" if days_until <= 14 else "🟠")
                 lines.append(
                     f"{bar} *{s['workshop_name']}*  –  {fmt_date(s['session_date'])} {s['session_time']}"
-                    f"  |  `{s['available_spots']} vrij`  `{pct}% bezet`  _(over {days_until} dagen)_"
+                    f"  |  `{s['available_spots']} tafels vrij`  `{pct}% bezet`  _(over {days_until} dagen)_"
                 )
             blocks.append({
                 "type": "section",
