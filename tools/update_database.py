@@ -64,6 +64,40 @@ def init_schema(conn: sqlite3.Connection):
     conn.commit()
 
 
+def remove_stale_sessions(conn: sqlite3.Connection, sessions: list[dict]) -> int:
+    """Verwijder toekomstige sessies die niet meer op de website staan.
+
+    Per URL die sessies heeft opgeleverd, weten we de volledige actuele
+    sessielijst. Toekomstige sessies voor die URL die er niet in zitten
+    zijn verwijderd van de website en mogen uit de database.
+    """
+    today = date.today().isoformat()
+
+    # Bouw per URL een set van (datum, tijd) op die wél gevonden zijn
+    url_slots: dict[str, set] = {}
+    for s in sessions:
+        url = s["url"]
+        if url not in url_slots:
+            url_slots[url] = set()
+        url_slots[url].add((s["date"], s["time"]))
+
+    removed = 0
+    for url, found_slots in url_slots.items():
+        # Haal alle toekomstige sessies voor deze URL op
+        rows = conn.execute(
+            "SELECT session_date, session_time FROM sessions WHERE url=? AND session_date >= ?",
+            (url, today)
+        ).fetchall()
+        for session_date, session_time in rows:
+            if (session_date, session_time) not in found_slots:
+                conn.execute(
+                    "DELETE FROM sessions WHERE url=? AND session_date=? AND session_time=?",
+                    (url, session_date, session_time)
+                )
+                removed += 1
+    return removed
+
+
 def upsert_sessions(conn: sqlite3.Connection, sessions: list[dict]) -> dict:
     today = date.today().isoformat()
     new_count = 0
@@ -147,12 +181,14 @@ def run():
     init_schema(conn)
 
     stats = upsert_sessions(conn, sessions)
+    removed = remove_stale_sessions(conn, sessions)
+    conn.commit()
     conn.close()
 
     print(
         f"Database bijgewerkt: "
         f"{stats['new']} nieuw, {stats['updated']} bijgewerkt, "
-        f"{stats['snapshots']} snapshots toegevoegd."
+        f"{stats['snapshots']} snapshots toegevoegd, {removed} verouderd verwijderd."
     )
     print(f"Database: {DB_PATH}")
 
