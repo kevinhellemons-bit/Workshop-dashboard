@@ -106,8 +106,21 @@ def fetch_sessions(url: str) -> list[dict]:
         # Fallback: try alternative JSON-like format from WooCommerce script tags
         matches = _try_json_fallback(html)
 
+    # Stop bij de eerste duplicate datum+tijd: de HTML bevat de publieke
+    # boekingskalender-slots eerst, daarna herhaalt een tweede JS-object
+    # dezelfde slots (inclusief extra groepsboekings-slots). Zodra een
+    # datum+tijd voor de tweede keer verschijnt zijn we in het tweede object.
+    seen_slots = set()
+    unique_matches = []
+    for m in matches:
+        key = (m[0], m[1])  # (datum, tijd)
+        if key in seen_slots:
+            break  # tweede batch begint — stop
+        seen_slots.add(key)
+        unique_matches.append(m)
+
     sessions = []
-    for date_str, time_str, spots_str in matches:
+    for date_str, time_str, spots_str in unique_matches:
         available = int(spots_str)
         booked = TOTAL_CAPACITY - available
         sessions.append({
