@@ -140,7 +140,7 @@ def build_data(conn):
         SELECT workshop_name, location, country, session_date, session_time
         FROM sessions
         WHERE session_date >= ? AND session_date <= ?
-          AND available_spots = 20
+          AND available_spots = 10
         ORDER BY session_date, session_time, location
     """, (today, in_6weeks))
 
@@ -651,7 +651,7 @@ function renderEmptySessions() {
   const summary = document.getElementById('emptySummary');
   const items = DATA.empty_sessions;
 
-  summary.textContent = `${items.length} sessie${items.length !== 1 ? 's' : ''} in de komende 6 weken hebben nog geen enkele boeking (0/20 tafels bezet).`;
+  summary.textContent = `${items.length} sessie${items.length !== 1 ? 's' : ''} in de komende 6 weken hebben nog geen enkele boeking (0/10 tafels bezet).`;
 
   if (!items.length) {
     grid.innerHTML = `<p style="color:var(--muted);padding:20px 0;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:1px;font-size:13px">Geen volledig lege sessies</p>`;

@@ -13,7 +13,7 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 
-TOTAL_CAPACITY = 20
+TOTAL_CAPACITY = 10
 
 WORKSHOP_URLS = [
     # ── Roosendaal (NL) ───────────────────────────────────────────────────
