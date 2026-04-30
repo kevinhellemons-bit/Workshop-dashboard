@@ -353,7 +353,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
   <div class="header-right">
     <div>Bijgewerkt op<strong id="genDate"></strong></div>
-    <button class="refresh-btn" id="refreshBtn" onclick="triggerRefresh()">&#8635; Vernieuwen</button>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+      <a href="?page=history" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:4px 12px;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">&#128202; Historisch</a>
+      <button class="refresh-btn" id="refreshBtn" onclick="triggerRefresh()">&#8635; Vernieuwen</button>
+    </div>
   </div>
 </header>
 

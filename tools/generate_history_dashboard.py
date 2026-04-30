@@ -245,7 +245,10 @@ HTML = """<!DOCTYPE html>
     <span>Historisch Dashboard &mdash; Gerealiseerde Bezettingsgraad</span>
   </div>
   <div class="header-right">
-    Gegenereerd op<strong id="genDate"></strong>
+    <div>Gegenereerd op<strong id="genDate"></strong></div>
+    <div style="margin-top:6px">
+      <a href="?" style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:4px 12px;" onmouseover="this.style.color=\'var(--text)\'" onmouseout="this.style.color=\'var(--muted)\'">&#8592; Actueel Dashboard</a>
+    </div>
   </div>
 </header>
 

@@ -21,11 +21,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ROOT          = Path(__file__).parent.parent
-DASHBOARD_HTML = ROOT / "dashboard.html"
-CREDENTIALS    = ROOT / "credentials.json"
-TOKEN_PATH     = ROOT / "token_apps_script.json"
-SCRIPT_ID      = os.getenv("APPS_SCRIPT_ID", "")
+ROOT               = Path(__file__).parent.parent
+DASHBOARD_HTML     = ROOT / "dashboard.html"
+HISTORY_HTML       = ROOT / "history_dashboard.html"
+CREDENTIALS        = ROOT / "credentials.json"
+TOKEN_PATH         = ROOT / "token_apps_script.json"
+SCRIPT_ID          = os.getenv("APPS_SCRIPT_ID", "")
 
 SCOPES = [
     "https://www.googleapis.com/auth/script.projects",
@@ -63,9 +64,13 @@ def get_current_files(service):
 
 
 DO_GET = (
-    "function doGet() {\n"
-    "  return HtmlService.createHtmlOutputFromFile('index')\n"
-    "    .setTitle('BBQ Experience Center \u2013 Dashboard')\n"
+    "function doGet(e) {\n"
+    "  var page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'index';\n"
+    "  var allowed = ['index', 'history'];\n"
+    "  if (allowed.indexOf(page) === -1) page = 'index';\n"
+    "  var titles = { index: 'BBQ Experience Center \u2013 Dashboard', history: 'BBQ Experience Center \u2013 Historisch Dashboard' };\n"
+    "  return HtmlService.createHtmlOutputFromFile(page)\n"
+    "    .setTitle(titles[page] || 'BBQ Experience Center')\n"
     "    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);\n"
     "}\n"
     "\n"
@@ -142,20 +147,20 @@ MANIFEST = json.dumps({
 }, indent=2)
 
 
-def push_dashboard(service, html_content):
-    """Vervang de index.html in het Apps Script project met nieuwe dashboard HTML."""
+def push_dashboard(service, html_content, history_content):
+    """Upload dashboard + historisch dashboard naar het Apps Script project."""
     current_files = get_current_files(service)
 
-    # Bewaar bestaand manifest als dat er al is, anders gebruik default
     manifest_src = next(
         (f["source"] for f in current_files if f.get("name") == "appsscript"),
         MANIFEST,
     )
 
     new_files = [
-        {"name": "appsscript", "type": "JSON",       "source": manifest_src},
-        {"name": "Code",       "type": "SERVER_JS",  "source": DO_GET},
-        {"name": "index",      "type": "HTML",        "source": html_content},
+        {"name": "appsscript", "type": "JSON",      "source": manifest_src},
+        {"name": "Code",       "type": "SERVER_JS", "source": DO_GET},
+        {"name": "index",      "type": "HTML",       "source": html_content},
+        {"name": "history",    "type": "HTML",       "source": history_content},
     ]
 
     service.projects().updateContent(
@@ -244,14 +249,20 @@ def run():
         print(f"ERROR: {DASHBOARD_HTML} niet gevonden. Eerst generate_dashboard.py uitvoeren.")
         raise SystemExit(1)
 
-    html = DASHBOARD_HTML.read_text(encoding="utf-8")
+    if not HISTORY_HTML.exists():
+        print(f"ERROR: {HISTORY_HTML} niet gevonden. Eerst generate_history_dashboard.py uitvoeren.")
+        raise SystemExit(1)
+
+    html         = DASHBOARD_HTML.read_text(encoding="utf-8")
+    history_html = HISTORY_HTML.read_text(encoding="utf-8")
     print(f"  Dashboard geladen: {len(html):,} bytes")
+    print(f"  Historisch dashboard geladen: {len(history_html):,} bytes")
 
     print("  Verbinden met Google Apps Script API...")
     service = get_service()
 
     print("  HTML uploaden naar Apps Script project...")
-    push_dashboard(service, html)
+    push_dashboard(service, html, history_html)
 
     print("  Deployment bijwerken...")
     update_deployment(service)
