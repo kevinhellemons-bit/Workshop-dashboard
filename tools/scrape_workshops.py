@@ -1,19 +1,26 @@
 """
-Scrapes all BBQ Experience Center workshop pages and extracts session data.
+Scrapes BBQ Experience Center workshop sessions.
+- NL (Roosendaal + Nunspeet): via Twize Booking API
+- BE (Herent): via HTML scraping (API key covers NL channel only)
 Output: .tmp/sessions.json
 """
 
 import json
+import os
 import re
 import time
-import os
 from datetime import datetime
 from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 TOTAL_CAPACITY = 10
+TWIZE_API_KEY = os.getenv("TWIZE_API_KEY", "")
+TWIZE_API_URL = "https://bxc.booking.twize.io/api/slots/"
 
 WORKSHOP_URLS = [
     # ── Roosendaal (NL) ───────────────────────────────────────────────────
@@ -75,7 +82,11 @@ WORKSHOP_URLS = [
     ("https://www.bbqexperiencecenter.be/nl/vlees-4-0/",                     "Vlees 4.0",                    "Herent",     "BE", 114.50),
 ]
 
-HEADERS = {
+# Lookups keyed by (workshop_name_lower, location) — used when mapping API results
+PRICE_MAP = {(name.lower(), loc): price for _, name, loc, _, price in WORKSHOP_URLS}
+URL_MAP   = {(name.lower(), loc): url   for url, name, loc, _, _  in WORKSHOP_URLS}
+
+HTML_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -84,28 +95,73 @@ HEADERS = {
     "Accept-Language": "nl-NL,nl;q=0.9",
 }
 
-# Elke locatie heeft een vaste location_id in het TBW booking systeem
 LOCATION_ID_MAP = {
     "Roosendaal": "1",
     "Nunspeet":   "2",
     "Herent":     "4",
 }
 
-# Haalt slot-objecten op met hun location_id uit de HTML
 SLOT_WITH_LOC_PATTERN = re.compile(
     r'"location_id"\s*:\s*(\d+)[^{}]{0,500}"option_label"\s*:\s*"#(\d{4}-\d{2}-\d{2})##(\d{2}:\d{2})###(\d+)"'
 )
 
-# Fallback patroon (geen location_id context)
 SESSION_PATTERN = re.compile(
     r"#(\d{4}-\d{2}-\d{2})##(\d{2}:\d{2})###(\d+)"
 )
 
 
+def fetch_sessions_from_api(scraped_at: str) -> list[dict]:
+    """Fetch all NL sessions from Twize Booking API."""
+    resp = requests.get(
+        TWIZE_API_URL,
+        headers={"Authorization": f"Bearer {TWIZE_API_KEY}", "Accept": "application/json"},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    records = []
+    for bookable in data.get("bookables", []):
+        workshop_name = bookable["name"]
+        for slot in bookable.get("slots", []):
+            if slot.get("publication_status") != "published":
+                continue
+            loc   = slot["location"]["name"]
+            cntry = slot["location"]["country"]
+            avail = slot["availability"]
+            available = avail["available_tables"]
+            booked    = avail["used_tables"]
+            total     = avail["max_tables"]
+
+            dt       = datetime.fromisoformat(slot["starts_at"])
+            date_str = dt.strftime("%Y-%m-%d")
+            time_str = dt.strftime("%H:%M")
+
+            key   = (workshop_name.lower(), loc)
+            url   = URL_MAP.get(key, f"twize://{bookable['id']}")
+            price = PRICE_MAP.get(key)
+
+            records.append({
+                "url":            url,
+                "workshop_name":  workshop_name,
+                "location":       loc,
+                "country":        cntry,
+                "price":          price,
+                "date":           date_str,
+                "time":           time_str,
+                "available_spots": available,
+                "booked_spots":   booked,
+                "total_capacity": total,
+                "occupancy_pct":  round(booked / total * 100, 1) if total else 0,
+                "scraped_at":     scraped_at,
+            })
+    return records
+
+
 def fetch_sessions(url: str, location: str = "") -> list[dict]:
-    """Fetch a workshop page and extract session slots for the given location."""
+    """Fetch a workshop page (HTML) and extract session slots. Used for Herent (BE)."""
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=20)
+        resp = requests.get(url, headers=HTML_HEADERS, timeout=20)
         resp.raise_for_status()
     except requests.RequestException as e:
         print(f"  ERROR fetching {url}: {e}")
@@ -114,11 +170,9 @@ def fetch_sessions(url: str, location: str = "") -> list[dict]:
     html = resp.text
     target_loc_id = LOCATION_ID_MAP.get(location)
 
-    # Primair: filter op location_id zodat alleen de juiste locatie-slots worden gelezen
     if target_loc_id:
         slot_matches = SLOT_WITH_LOC_PATTERN.findall(html)
         filtered = [(d, t, s) for loc_id, d, t, s in slot_matches if loc_id == target_loc_id]
-        # Dedupliceer (zelfde datum+tijd kan meerdere keren voorkomen)
         seen = set()
         matches = []
         for d, t, s in filtered:
@@ -135,31 +189,23 @@ def fetch_sessions(url: str, location: str = "") -> list[dict]:
         available = int(spots_str)
         booked = TOTAL_CAPACITY - available
         sessions.append({
-            "date": date_str,
-            "time": time_str,
+            "date":            date_str,
+            "time":            time_str,
             "available_spots": available,
-            "booked_spots": booked,
-            "total_capacity": TOTAL_CAPACITY,
-            "occupancy_pct": round(booked / TOTAL_CAPACITY * 100, 1),
+            "booked_spots":    booked,
+            "total_capacity":  TOTAL_CAPACITY,
+            "occupancy_pct":   round(booked / TOTAL_CAPACITY * 100, 1),
         })
-
     return sessions
 
 
 def _try_json_fallback(html: str) -> list[tuple]:
-    """
-    Secondary extraction: look for WooCommerce Bookings JS objects.
-    Returns list of (date, time, available_spots) tuples.
-    """
     results = []
-
-    # Pattern: "2026-03-27":{"18:00":{"available":6}}
     pattern = re.compile(
         r'"(\d{4}-\d{2}-\d{2})"[^}]*?"(\d{2}:\d{2})"[^}]*?"available"\s*:\s*(\d+)'
     )
     for m in pattern.finditer(html):
         results.append((m.group(1), m.group(2), m.group(3)))
-
     return results
 
 
@@ -172,38 +218,56 @@ def run():
     all_records = []
     errors = []
 
-    print(f"Scraping {len(WORKSHOP_URLS)} workshop pages...")
+    # ── NL locations via Twize API (Roosendaal + Nunspeet) ─────────────────
+    if TWIZE_API_KEY:
+        print("Fetching NL sessions from Twize API...")
+        try:
+            nl_records = fetch_sessions_from_api(scraped_at)
+            # Count per location for reporting
+            by_loc: dict[str, int] = {}
+            for r in nl_records:
+                by_loc[r["location"]] = by_loc.get(r["location"], 0) + 1
+            for loc, count in sorted(by_loc.items()):
+                print(f"  {loc}: {count} sessies")
+            print(f"  Totaal NL: {len(nl_records)} sessies")
+            all_records.extend(nl_records)
+        except Exception as e:
+            print(f"  ERROR Twize API: {e}")
+            errors.append(TWIZE_API_URL)
+    else:
+        print("TWIZE_API_KEY niet gevonden — API overgeslagen.")
 
-    for i, (url, name, location, country, price) in enumerate(WORKSHOP_URLS, 1):
-        print(f"  [{i:02d}/{len(WORKSHOP_URLS)}] {name} – {location}... ", end="", flush=True)
+    # ── BE location via HTML scraping (Herent only) ────────────────────────
+    be_urls = [
+        (url, name, loc, country, price)
+        for url, name, loc, country, price in WORKSHOP_URLS
+        if country == "BE"
+    ]
+    print(f"\nScraping {len(be_urls)} Herent (BE) pagina's...")
+    for i, (url, name, location, country, price) in enumerate(be_urls, 1):
+        print(f"  [{i:02d}/{len(be_urls)}] {name} – {location}... ", end="", flush=True)
         sessions = fetch_sessions(url, location)
         print(f"{len(sessions)} sessies gevonden")
-
         if not sessions:
             errors.append(url)
-
         for s in sessions:
             all_records.append({
-                "url": url,
+                "url":           url,
                 "workshop_name": name,
-                "location": location,
-                "country": country,
-                "price": price,
+                "location":      location,
+                "country":       country,
+                "price":         price,
                 **s,
-                "scraped_at": scraped_at,
+                "scraped_at":    scraped_at,
             })
-
-        # Be polite — 1 second between requests
-        if i < len(WORKSHOP_URLS):
+        if i < len(be_urls):
             time.sleep(1)
 
     result = {
-        "scraped_at": scraped_at,
-        "total_urls": len(WORKSHOP_URLS),
-        "urls_with_sessions": len(WORKSHOP_URLS) - len(errors),
-        "total_sessions": len(all_records),
-        "errors": errors,
-        "sessions": all_records,
+        "scraped_at":         scraped_at,
+        "total_sessions":     len(all_records),
+        "errors":             errors,
+        "sessions":           all_records,
     }
 
     with open(output_file, "w", encoding="utf-8") as f:
@@ -211,7 +275,7 @@ def run():
 
     print(f"\nKlaar. {len(all_records)} sessies opgeslagen in {output_file}")
     if errors:
-        print(f"Geen sessies gevonden voor {len(errors)} URL(s):")
+        print(f"Fouten bij {len(errors)} bron(nen):")
         for e in errors:
             print(f"  - {e}")
 
