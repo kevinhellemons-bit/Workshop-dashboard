@@ -29,6 +29,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Workshops scrapen
+        env:
+          TWIZE_API_KEY: ${{ secrets.TWIZE_API_KEY }}
+          TWIZE_API_KEY_BE: ${{ secrets.TWIZE_API_KEY_BE }}
         run: python tools/scrape_workshops.py
 
       - name: Database bijwerken
@@ -36,6 +39,9 @@ jobs:
 
       - name: Dashboard genereren
         run: python tools/generate_dashboard.py
+
+      - name: Historisch dashboard genereren
+        run: python tools/generate_history_dashboard.py
 
       - name: Dashboard publiceren naar Apps Script
         env:

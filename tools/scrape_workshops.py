@@ -19,8 +19,9 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 TOTAL_CAPACITY = 10
-TWIZE_API_KEY = os.getenv("TWIZE_API_KEY", "")
-TWIZE_API_URL = "https://bxc.booking.twize.io/api/slots/"
+TWIZE_API_KEY    = os.getenv("TWIZE_API_KEY", "")
+TWIZE_API_KEY_BE = os.getenv("TWIZE_API_KEY_BE", "")
+TWIZE_API_URL    = "https://bxc.booking.twize.io/api/slots/"
 
 WORKSHOP_URLS = [
     # ── Roosendaal (NL) ───────────────────────────────────────────────────
@@ -110,11 +111,11 @@ SESSION_PATTERN = re.compile(
 )
 
 
-def fetch_sessions_from_api(scraped_at: str) -> list[dict]:
-    """Fetch all NL sessions from Twize Booking API."""
+def fetch_sessions_from_api(scraped_at: str, api_key: str, country_override: str | None = None) -> list[dict]:
+    """Fetch all sessions from Twize Booking API for a given key/channel."""
     resp = requests.get(
         TWIZE_API_URL,
-        headers={"Authorization": f"Bearer {TWIZE_API_KEY}", "Accept": "application/json"},
+        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
         timeout=20,
     )
     resp.raise_for_status()
@@ -127,7 +128,7 @@ def fetch_sessions_from_api(scraped_at: str) -> list[dict]:
             if slot.get("publication_status") != "published":
                 continue
             loc   = slot["location"]["name"]
-            cntry = slot["location"]["country"]
+            cntry = country_override or slot["location"]["country"]
             avail = slot["availability"]
             available = avail["available_tables"]
             booked    = avail["used_tables"]
@@ -222,8 +223,7 @@ def run():
     if TWIZE_API_KEY:
         print("Fetching NL sessions from Twize API...")
         try:
-            nl_records = fetch_sessions_from_api(scraped_at)
-            # Count per location for reporting
+            nl_records = fetch_sessions_from_api(scraped_at, TWIZE_API_KEY)
             by_loc: dict[str, int] = {}
             for r in nl_records:
                 by_loc[r["location"]] = by_loc.get(r["location"], 0) + 1
@@ -232,36 +232,53 @@ def run():
             print(f"  Totaal NL: {len(nl_records)} sessies")
             all_records.extend(nl_records)
         except Exception as e:
-            print(f"  ERROR Twize API: {e}")
+            print(f"  ERROR Twize NL API: {e}")
             errors.append(TWIZE_API_URL)
     else:
-        print("TWIZE_API_KEY niet gevonden — API overgeslagen.")
+        print("TWIZE_API_KEY niet gevonden — NL API overgeslagen.")
 
-    # ── BE location via HTML scraping (Herent only) ────────────────────────
-    be_urls = [
-        (url, name, loc, country, price)
-        for url, name, loc, country, price in WORKSHOP_URLS
-        if country == "BE"
-    ]
-    print(f"\nScraping {len(be_urls)} Herent (BE) pagina's...")
-    for i, (url, name, location, country, price) in enumerate(be_urls, 1):
-        print(f"  [{i:02d}/{len(be_urls)}] {name} – {location}... ", end="", flush=True)
-        sessions = fetch_sessions(url, location)
-        print(f"{len(sessions)} sessies gevonden")
-        if not sessions:
-            errors.append(url)
-        for s in sessions:
-            all_records.append({
-                "url":           url,
-                "workshop_name": name,
-                "location":      location,
-                "country":       country,
-                "price":         price,
-                **s,
-                "scraped_at":    scraped_at,
-            })
-        if i < len(be_urls):
-            time.sleep(1)
+    # ── BE location via Twize API (Herent) ─────────────────────────────────
+    if TWIZE_API_KEY_BE:
+        print("Fetching BE sessions from Twize API...")
+        try:
+            # BE API wrongly reports country="NL" for Herent — override to "BE"
+            be_records = fetch_sessions_from_api(scraped_at, TWIZE_API_KEY_BE, country_override="BE")
+            by_loc_be: dict[str, int] = {}
+            for r in be_records:
+                by_loc_be[r["location"]] = by_loc_be.get(r["location"], 0) + 1
+            for loc, count in sorted(by_loc_be.items()):
+                print(f"  {loc}: {count} sessies")
+            print(f"  Totaal BE: {len(be_records)} sessies")
+            all_records.extend(be_records)
+        except Exception as e:
+            print(f"  ERROR Twize BE API: {e}")
+            errors.append(TWIZE_API_URL + "?be")
+    else:
+        # Fallback: HTML scraping for Herent
+        be_urls = [
+            (url, name, loc, country, price)
+            for url, name, loc, country, price in WORKSHOP_URLS
+            if country == "BE"
+        ]
+        print(f"\nScraping {len(be_urls)} Herent (BE) pagina's (geen BE API key)...")
+        for i, (url, name, location, country, price) in enumerate(be_urls, 1):
+            print(f"  [{i:02d}/{len(be_urls)}] {name} – {location}... ", end="", flush=True)
+            sessions = fetch_sessions(url, location)
+            print(f"{len(sessions)} sessies gevonden")
+            if not sessions:
+                errors.append(url)
+            for s in sessions:
+                all_records.append({
+                    "url":           url,
+                    "workshop_name": name,
+                    "location":      location,
+                    "country":       country,
+                    "price":         price,
+                    **s,
+                    "scraped_at":    scraped_at,
+                })
+            if i < len(be_urls):
+                time.sleep(1)
 
     result = {
         "scraped_at":         scraped_at,
