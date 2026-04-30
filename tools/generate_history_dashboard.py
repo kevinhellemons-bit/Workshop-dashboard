@@ -10,8 +10,6 @@ from pathlib import Path
 
 DB_PATH  = Path(__file__).parent.parent / ".tmp" / "workshops.db"
 OUT_PATH = Path(__file__).parent.parent / "history_dashboard.html"
-CHARTJS_CACHE = Path(__file__).parent.parent / ".tmp" / "chartjs.min.js"
-CHARTJS_CDN   = "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
 
 
 def get_conn():
@@ -549,17 +547,6 @@ renderPastTable();
 </html>"""
 
 
-def get_chartjs() -> str:
-    if CHARTJS_CACHE.exists():
-        return CHARTJS_CACHE.read_text(encoding="utf-8")
-    import requests
-    print("  Chart.js downloaden...", end=" ", flush=True)
-    js = requests.get(CHARTJS_CDN, timeout=30).text
-    CHARTJS_CACHE.write_text(js, encoding="utf-8")
-    print("klaar.")
-    return js
-
-
 def run():
     if not DB_PATH.exists():
         print(f"ERROR: {DB_PATH} niet gevonden.")
@@ -574,12 +561,9 @@ def run():
     snap_days  = snap_row["days"] if snap_row else 0
     conn.close()
 
-    chartjs = get_chartjs()
-    inline_script = f"<script>{chartjs}</script>"
-
+    # Chart.js wordt via CDN geladen (geen inline embedding) — houdt bestand klein voor Apps Script
     html = (
         HTML
-        .replace('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>', inline_script)
         .replace("__DATA__", json.dumps(data, ensure_ascii=False, default=str))
         .replace("{{SNAP_COUNT}}", str(snap_count))
         .replace("{{SNAP_DAYS}}", str(snap_days))
