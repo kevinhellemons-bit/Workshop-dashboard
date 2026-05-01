@@ -8,8 +8,24 @@ import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
+import requests
+
+CHARTJS_CDN   = "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
+CHARTJS_CACHE = Path(__file__).parent.parent / ".tmp" / "chartjs.min.js"
+
 DB_PATH  = Path(__file__).parent.parent / ".tmp" / "workshops.db"
 OUT_PATH = Path(__file__).parent.parent / "history_dashboard.html"
+
+
+def get_chartjs() -> str:
+    """Return Chart.js source — from local cache if available, else download."""
+    if CHARTJS_CACHE.exists():
+        return CHARTJS_CACHE.read_text(encoding="utf-8")
+    print("  Chart.js downloaden...", end=" ", flush=True)
+    js = requests.get(CHARTJS_CDN, timeout=30).text
+    CHARTJS_CACHE.write_text(js, encoding="utf-8")
+    print(f"{len(js):,} bytes gecached.")
+    return js
 
 
 def get_conn():
@@ -561,9 +577,12 @@ def run():
     snap_days  = snap_row["days"] if snap_row else 0
     conn.close()
 
-    # Chart.js wordt via CDN geladen (geen inline embedding) — houdt bestand klein voor Apps Script
+    chartjs = get_chartjs()
+    inline_script = f"<script>{chartjs}</script>"
+
     html = (
         HTML
+        .replace('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>', inline_script)
         .replace("__DATA__", json.dumps(data, ensure_ascii=False, default=str))
         .replace("{{SNAP_COUNT}}", str(snap_count))
         .replace("{{SNAP_DAYS}}", str(snap_days))

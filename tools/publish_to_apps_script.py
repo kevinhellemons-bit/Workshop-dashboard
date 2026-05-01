@@ -63,14 +63,16 @@ def get_current_files(service):
     return result.get("files", [])
 
 
-DO_GET = (
+DO_GET_INDEX = (
     "function doGet(e) {\n"
     "  var page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'index';\n"
-    "  var allowed = ['index', 'history'];\n"
-    "  if (allowed.indexOf(page) === -1) page = 'index';\n"
-    "  var titles = { index: 'BBQ Experience Center \u2013 Dashboard', history: 'BBQ Experience Center \u2013 Historisch Dashboard' };\n"
-    "  return HtmlService.createHtmlOutputFromFile(page)\n"
-    "    .setTitle(titles[page] || 'BBQ Experience Center')\n"
+    "  if (page === 'history') {\n"
+    "    return HtmlService.createHtmlOutput(HISTORY_CONTENT)\n"
+    "      .setTitle('BBQ Experience Center \u2013 Historisch Dashboard')\n"
+    "      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);\n"
+    "  }\n"
+    "  return HtmlService.createHtmlOutputFromFile('index')\n"
+    "    .setTitle('BBQ Experience Center \u2013 Dashboard')\n"
     "    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);\n"
     "}\n"
     "\n"
@@ -148,7 +150,12 @@ MANIFEST = json.dumps({
 
 
 def push_dashboard(service, html_content, history_content):
-    """Upload dashboard + historisch dashboard naar het Apps Script project."""
+    """Upload dashboard naar het Apps Script project.
+
+    Het historisch dashboard wordt als JSON-string in Code.gs ingebed en via
+    createHtmlOutput() geserveerd — zo omzeilen we het probleem dat
+    createHtmlOutputFromFile('history') een lege pagina teruggeeft.
+    """
     current_files = get_current_files(service)
 
     manifest_src = next(
@@ -156,11 +163,20 @@ def push_dashboard(service, html_content, history_content):
         MANIFEST,
     )
 
+    # Embed history HTML as a JS string in a separate .gs file.
+    # Code.gs (functions only) references HISTORY_CONTENT from the shared project scope.
+    # Splitting keeps each .gs file smaller and avoids per-file size limits.
+    history_json    = json.dumps(history_content)
+    history_content_gs = f"var HISTORY_CONTENT = {history_json};\n"
+
+    print(f"  Code.gs grootte: {len(DO_GET_INDEX.encode('utf-8')):,} bytes")
+    print(f"  HistoryContent.gs grootte: {len(history_content_gs.encode('utf-8')):,} bytes")
+
     new_files = [
-        {"name": "appsscript", "type": "JSON",      "source": manifest_src},
-        {"name": "Code",       "type": "SERVER_JS", "source": DO_GET},
-        {"name": "index",      "type": "HTML",       "source": html_content},
-        {"name": "history",    "type": "HTML",       "source": history_content},
+        {"name": "appsscript",     "type": "JSON",      "source": manifest_src},
+        {"name": "HistoryContent", "type": "SERVER_JS", "source": history_content_gs},
+        {"name": "Code",           "type": "SERVER_JS", "source": DO_GET_INDEX},
+        {"name": "index",          "type": "HTML",       "source": html_content},
     ]
 
     service.projects().updateContent(
