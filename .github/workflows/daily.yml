@@ -40,9 +40,6 @@ jobs:
       - name: Dashboard genereren
         run: python tools/generate_dashboard.py
 
-      - name: Historisch dashboard genereren
-        run: python tools/generate_history_dashboard.py
-
       - name: Dashboard publiceren naar Apps Script
         env:
           APPS_SCRIPT_ID: "1gzVYcMinc-rU5XR5e0CKeht4_LUBie7sazllg6hywwuK3avMPZobmRhX"

@@ -21,12 +21,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ROOT               = Path(__file__).parent.parent
-DASHBOARD_HTML     = ROOT / "dashboard.html"
-HISTORY_HTML       = ROOT / "history_dashboard.html"
-CREDENTIALS        = ROOT / "credentials.json"
-TOKEN_PATH         = ROOT / "token_apps_script.json"
-SCRIPT_ID          = os.getenv("APPS_SCRIPT_ID", "")
+ROOT           = Path(__file__).parent.parent
+DASHBOARD_HTML = ROOT / "dashboard.html"
+CREDENTIALS    = ROOT / "credentials.json"
+TOKEN_PATH     = ROOT / "token_apps_script.json"
+SCRIPT_ID      = os.getenv("APPS_SCRIPT_ID", "")
 
 SCOPES = [
     "https://www.googleapis.com/auth/script.projects",
@@ -58,21 +57,14 @@ def get_service():
 
 
 def get_current_files(service):
-    """Haal huidige scriptbestanden op zodat we ze kunnen behouden."""
     result = service.projects().getContent(scriptId=SCRIPT_ID).execute()
     return result.get("files", [])
 
 
-DO_GET_INDEX = (
-    "function doGet(e) {\n"
-    "  var page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'index';\n"
-    "  if (page === 'history') {\n"
-    "    return HtmlService.createHtmlOutput(HISTORY_CONTENT)\n"
-    "      .setTitle('BBQ Experience Center \u2013 Historisch Dashboard')\n"
-    "      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);\n"
-    "  }\n"
+DO_GET = (
+    "function doGet() {\n"
     "  return HtmlService.createHtmlOutputFromFile('index')\n"
-    "    .setTitle('BBQ Experience Center \u2013 Dashboard')\n"
+    "    .setTitle('BBQ Experience Center – Dashboard')\n"
     "    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);\n"
     "}\n"
     "\n"
@@ -104,7 +96,7 @@ DO_GET_INDEX = (
     "    var token = props.getProperty('SLACK_BOT_TOKEN');\n"
     "    var channels = { marketing: '#marketing', klantenservice: '#klantenservice', retail: '#support-team-retail' };\n"
     "    var labels   = { marketing: 'Marketing Push', klantenservice: 'Annuleren', retail: 'Andere Workshop in Plaats' };\n"
-    "    var emojis   = { marketing: '\U0001F4E3', klantenservice: '\u274C', retail: '\U0001F504' };\n"
+    "    var emojis   = { marketing: '\U0001F4E3', klantenservice: '❌', retail: '\U0001F504' };\n"
     "    var byChannel = {};\n"
     "    actions.forEach(function(a) {\n"
     "      if (!byChannel[a.action_id]) byChannel[a.action_id] = [];\n"
@@ -115,13 +107,13 @@ DO_GET_INDEX = (
     "      if (!token) { missing.push(ch); return; }\n"
     "      var items = byChannel[ch];\n"
     "      var lines = items.map(function(a) {\n"
-    "        var spots = a.available_spots ? ' \u2014 `' + a.available_spots + ' vrij`' : '';\n"
-    "        return '\u2022 *' + a.workshop + '* \u2014 ' + a.location + ' \u2014 ' + a.date + ' ' + a.time + spots;\n"
+    "        var spots = a.available_spots ? ' — `' + a.available_spots + ' vrij`' : '';\n"
+    "        return '• *' + a.workshop + '* — ' + a.location + ' — ' + a.date + ' ' + a.time + spots;\n"
     "      });\n"
     "      var blocks = [\n"
     "        { type: 'header', text: { type: 'plain_text', text: emojis[ch] + ' Actiepunt: ' + labels[ch] } },\n"
     "        { type: 'section', text: { type: 'mrkdwn', text: '*' + items.length + ' sessie' + (items.length > 1 ? 's' : '') + ':*\\n' + lines.join('\\n') } },\n"
-    "        { type: 'context', elements: [{ type: 'mrkdwn', text: 'BBQ Experience Center \u00b7 Dashboard actiepunt' }] }\n"
+    "        { type: 'context', elements: [{ type: 'mrkdwn', text: 'BBQ Experience Center · Dashboard actiepunt' }] }\n"
     "      ];\n"
     "      UrlFetchApp.fetch('https://slack.com/api/chat.postMessage', {\n"
     "        method: 'post', contentType: 'application/json',\n"
@@ -149,13 +141,7 @@ MANIFEST = json.dumps({
 }, indent=2)
 
 
-def push_dashboard(service, html_content, history_content):
-    """Upload dashboard naar het Apps Script project.
-
-    Het historisch dashboard wordt als JSON-string in Code.gs ingebed en via
-    createHtmlOutput() geserveerd — zo omzeilen we het probleem dat
-    createHtmlOutputFromFile('history') een lege pagina teruggeeft.
-    """
+def push_dashboard(service, html_content):
     current_files = get_current_files(service)
 
     manifest_src = next(
@@ -163,20 +149,10 @@ def push_dashboard(service, html_content, history_content):
         MANIFEST,
     )
 
-    # Embed history HTML as a JS string in a separate .gs file.
-    # Code.gs (functions only) references HISTORY_CONTENT from the shared project scope.
-    # Splitting keeps each .gs file smaller and avoids per-file size limits.
-    history_json    = json.dumps(history_content)
-    history_content_gs = f"var HISTORY_CONTENT = {history_json};\n"
-
-    print(f"  Code.gs grootte: {len(DO_GET_INDEX.encode('utf-8')):,} bytes")
-    print(f"  HistoryContent.gs grootte: {len(history_content_gs.encode('utf-8')):,} bytes")
-
     new_files = [
-        {"name": "appsscript",     "type": "JSON",      "source": manifest_src},
-        {"name": "HistoryContent", "type": "SERVER_JS", "source": history_content_gs},
-        {"name": "Code",           "type": "SERVER_JS", "source": DO_GET_INDEX},
-        {"name": "index",          "type": "HTML",       "source": html_content},
+        {"name": "appsscript", "type": "JSON",      "source": manifest_src},
+        {"name": "Code",       "type": "SERVER_JS", "source": DO_GET},
+        {"name": "index",      "type": "HTML",       "source": html_content},
     ]
 
     service.projects().updateContent(
@@ -186,20 +162,16 @@ def push_dashboard(service, html_content, history_content):
 
 
 def update_deployment(service):
-    """Maak een nieuwe versie aan en update de bestaande deployment."""
-    # Maak nieuwe versie
     version = service.projects().versions().create(
         scriptId=SCRIPT_ID,
-        body={"description": f"Dashboard update"},
+        body={"description": "Dashboard update"},
     ).execute()
     version_number = version["versionNumber"]
 
-    # Zoek bestaande deployment
     deployments = service.projects().deployments().list(
         scriptId=SCRIPT_ID
     ).execute().get("deployments", [])
 
-    # Gebruik de eerste niet-@HEAD deployment
     target = next(
         (d for d in deployments if d.get("deploymentId") and
          d.get("deploymentConfig", {}).get("versionNumber") is not None),
@@ -220,12 +192,10 @@ def update_deployment(service):
             },
         ).execute()
         print(f"  Deployment bijgewerkt (versie {version_number})")
-        entry_points = result.get("entryPoints", [])
-        for ep in entry_points:
+        for ep in result.get("entryPoints", []):
             if ep.get("entryPointType") == "WEB_APP":
                 print(f"  Deployment URL: {ep['webApp']['url']}")
     else:
-        # Geen bestaande deployment — maak nieuwe aan
         dep = service.projects().deployments().create(
             scriptId=SCRIPT_ID,
             body={
@@ -236,14 +206,12 @@ def update_deployment(service):
         ).execute()
         dep_id = dep.get("deploymentId")
         print(f"  Nieuwe deployment aangemaakt: {dep_id}")
-        entry_points = dep.get("entryPoints", [])
-        for ep in entry_points:
+        for ep in dep.get("entryPoints", []):
             if ep.get("entryPointType") == "WEB_APP":
                 print(f"  Deployment URL: {ep['webApp']['url']}")
 
 
 def run():
-    # In CI: schrijf credentials/token vanuit env vars naar bestanden (vóór checks)
     creds_env = os.getenv("GOOGLE_CREDENTIALS_JSON")
     token_env = os.getenv("GOOGLE_TOKEN_JSON")
     if creds_env:
@@ -253,32 +221,24 @@ def run():
 
     if not SCRIPT_ID:
         print("ERROR: APPS_SCRIPT_ID niet ingesteld in .env")
-        print("  Voeg toe: APPS_SCRIPT_ID=jouw-script-id")
         raise SystemExit(1)
 
     if not CREDENTIALS.exists():
         print(f"ERROR: {CREDENTIALS} niet gevonden.")
-        print("  Download OAuth credentials via Google Cloud Console → Inloggegevens → OAuth 2.0-client-ID")
         raise SystemExit(1)
 
     if not DASHBOARD_HTML.exists():
         print(f"ERROR: {DASHBOARD_HTML} niet gevonden. Eerst generate_dashboard.py uitvoeren.")
         raise SystemExit(1)
 
-    if not HISTORY_HTML.exists():
-        print(f"ERROR: {HISTORY_HTML} niet gevonden. Eerst generate_history_dashboard.py uitvoeren.")
-        raise SystemExit(1)
-
-    html         = DASHBOARD_HTML.read_text(encoding="utf-8")
-    history_html = HISTORY_HTML.read_text(encoding="utf-8")
+    html = DASHBOARD_HTML.read_text(encoding="utf-8")
     print(f"  Dashboard geladen: {len(html):,} bytes")
-    print(f"  Historisch dashboard geladen: {len(history_html):,} bytes")
 
     print("  Verbinden met Google Apps Script API...")
     service = get_service()
 
     print("  HTML uploaden naar Apps Script project...")
-    push_dashboard(service, html, history_html)
+    push_dashboard(service, html)
 
     print("  Deployment bijwerken...")
     update_deployment(service)
