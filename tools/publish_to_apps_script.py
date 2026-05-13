@@ -161,12 +161,50 @@ def push_dashboard(service, html_content):
     ).execute()
 
 
+def get_or_create_daily_version(service) -> int | None:
+    """Geef de versie van vandaag terug, of maak er één aan (max 1 per dag).
+
+    Als de Apps Script versielimiet (200) bereikt is, wordt None teruggegeven
+    en blijft de bestaande deployment actief.
+    """
+    from datetime import date
+    today = date.today().isoformat()
+    today_desc = f"Dashboard {today}"
+
+    # Hergebruik bestaande versie van vandaag als die al bestaat
+    versions = service.projects().versions().list(
+        scriptId=SCRIPT_ID
+    ).execute().get("versions", [])
+
+    existing = next(
+        (v for v in versions if v.get("description", "").startswith(today_desc)),
+        None,
+    )
+    if existing:
+        print(f"  Versie van vandaag al aanwezig ({existing['versionNumber']}) — hergebruiken.")
+        return existing["versionNumber"]
+
+    # Nieuwe versie aanmaken
+    try:
+        version = service.projects().versions().create(
+            scriptId=SCRIPT_ID,
+            body={"description": today_desc},
+        ).execute()
+        print(f"  Nieuwe versie aangemaakt: {version['versionNumber']}")
+        return version["versionNumber"]
+    except Exception as e:
+        if "200 versions" in str(e) or "429" in str(e):
+            print("  WAARSCHUWING: Apps Script versielimiet (200) bereikt.")
+            print("  Ga naar script.google.com > project > klokicoon > verwijder oude versies.")
+            print("  De bestaande deployment blijft actief met de vorige versie.")
+            return None
+        raise
+
+
 def update_deployment(service):
-    version = service.projects().versions().create(
-        scriptId=SCRIPT_ID,
-        body={"description": "Dashboard update"},
-    ).execute()
-    version_number = version["versionNumber"]
+    version_number = get_or_create_daily_version(service)
+    if version_number is None:
+        return  # Limiet bereikt — bestaande deployment blijft actief
 
     deployments = service.projects().deployments().list(
         scriptId=SCRIPT_ID
