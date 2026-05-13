@@ -41,6 +41,7 @@ jobs:
         env:
           DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          DISPATCH_REF: ${{ github.ref_name }}
         run: |
           python tools/generate_dashboard.py
           mkdir -p gh-pages

@@ -470,6 +470,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 const DATA = __DATA__;
 const DISPATCH_TOKEN = '__DISPATCH_TOKEN__';
 const DISPATCH_REPO  = '__DISPATCH_REPO__';
+const DISPATCH_REF   = '__DISPATCH_REF__';
 
 document.getElementById('genDate').textContent = DATA.generated_at;
 
@@ -698,7 +699,7 @@ function triggerRefresh() {
       'Accept': 'application/vnd.github+json',
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ ref: 'main' })
+    body: JSON.stringify({ ref: DISPATCH_REF })
   }).then(function(r) {
     btn.disabled = false;
     btn.innerHTML = '&#8635; Vernieuwen';
@@ -904,7 +905,7 @@ function sendActions() {
       'Accept': 'application/vnd.github+json',
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ ref: 'main', inputs: { slack_data: JSON.stringify({ actions: payload }) } })
+    body: JSON.stringify({ ref: DISPATCH_REF, inputs: { slack_data: JSON.stringify({ actions: payload }) } })
   }).then(function(r) {
     btn.disabled = false;
     btn.textContent = 'Verstuur naar Slack \u2192';
@@ -982,6 +983,7 @@ def run():
         .replace("__DATA__", json.dumps(data, ensure_ascii=False, default=str))
         .replace("__DISPATCH_TOKEN__", dispatch_token)
         .replace("__DISPATCH_REPO__", dispatch_repo)
+        .replace("__DISPATCH_REF__", os.getenv("DISPATCH_REF", "master"))
     )
 
     with open(OUT_PATH, "w", encoding="utf-8") as f:
