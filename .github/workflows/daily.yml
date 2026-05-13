@@ -6,7 +6,7 @@ on:
   workflow_dispatch:       # Handmatig starten vanuit GitHub (of via dashboard-knop)
 
 permissions:
-  contents: write          # Nodig voor git push van workshops.db
+  contents: write          # Nodig voor git push van workshops.db en gh-pages branch
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # Node.js 24 compatibiliteit
@@ -38,14 +38,25 @@ jobs:
         run: python tools/update_database.py
 
       - name: Dashboard genereren
-        run: python tools/generate_dashboard.py
-
-      - name: Dashboard publiceren naar Apps Script
         env:
-          APPS_SCRIPT_ID: "1gzVYcMinc-rU5XR5e0CKeht4_LUBie7sazllg6hywwuK3avMPZobmRhX"
-          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
-        run: python tools/publish_to_apps_script.py
+          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python tools/generate_dashboard.py
+          mkdir -p gh-pages
+          cp dashboard.html gh-pages/index.html
+
+      - name: Dashboard publiceren naar GitHub Pages
+        run: |
+          cd /tmp
+          mkdir pages && cp $GITHUB_WORKSPACE/gh-pages/index.html pages/index.html
+          cd pages
+          git init
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add index.html
+          git commit -m "chore: dashboard update [skip ci]"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:gh-pages
 
       - name: Dagelijkse Slack digest versturen (alleen 06:00 UTC)
         continue-on-error: true
@@ -75,6 +86,7 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
+          git pull --rebase origin master || git pull --rebase origin main
           git add .tmp/workshops.db
           git diff --staged --quiet || git commit -m "chore: database update $(date +%Y-%m-%d) [skip ci]"
           git push

@@ -4,6 +4,7 @@ Reads .tmp/workshops.db and generates dashboard.html.
 
 import sqlite3
 import json
+import os
 import requests
 from datetime import date, timedelta
 from pathlib import Path
@@ -467,6 +468,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 <script>
 const DATA = __DATA__;
+const DISPATCH_TOKEN = '__DISPATCH_TOKEN__';
+const DISPATCH_REPO  = '__DISPATCH_REPO__';
 
 document.getElementById('genDate').textContent = DATA.generated_at;
 
@@ -688,22 +691,27 @@ function triggerRefresh() {
   const btn = document.getElementById('refreshBtn');
   btn.disabled = true;
   btn.textContent = 'Bezig\u2026';
-  google.script.run
-    .withSuccessHandler(function(result) {
-      btn.disabled = false;
-      btn.innerHTML = '&#8635; Vernieuwen';
-      if (result && result.ok) {
-        showToast('\u2713 Update gestart — duurt ca. 2 minuten');
-      } else {
-        showToast('\u26a0 ' + (result ? result.error : 'Geen reactie'), true);
-      }
-    })
-    .withFailureHandler(function(err) {
-      btn.disabled = false;
-      btn.innerHTML = '&#8635; Vernieuwen';
-      showToast('\u26a0 Fout: ' + err.message, true);
-    })
-    .triggerWorkflow();
+  fetch('https://api.github.com/repos/' + DISPATCH_REPO + '/actions/workflows/daily.yml/dispatches', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + DISPATCH_TOKEN,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ ref: 'main' })
+  }).then(function(r) {
+    btn.disabled = false;
+    btn.innerHTML = '&#8635; Vernieuwen';
+    if (r.status === 204) {
+      showToast('\u2713 Update gestart \u2014 duurt ca. 2 minuten');
+    } else {
+      showToast('\u26a0 GitHub status ' + r.status, true);
+    }
+  }).catch(function(err) {
+    btn.disabled = false;
+    btn.innerHTML = '&#8635; Vernieuwen';
+    showToast('\u26a0 Fout: ' + err.message, true);
+  });
 }
 
 // ── Populate filter dropdowns dynamically ─────────────────────────────────
@@ -889,27 +897,28 @@ function sendActions() {
   btn.disabled = true;
   btn.textContent = 'Versturen\u2026';
 
-  google.script.run
-    .withSuccessHandler(function(result) {
-      btn.disabled = false;
-      btn.textContent = 'Verstuur naar Slack \u2192';
-      if (result && result.ok && result.sent > 0) {
-        clearActions();
-        showToast('\u2713 ' + result.sent + ' actiepunt' + (result.sent !== 1 ? 'en' : '') + ' verstuurd naar Slack');
-      } else if (result && result.ok && result.missing && result.missing.length > 0) {
-        showToast('\u26a0 SLACK_BOT_TOKEN ontbreekt in Apps Script (Projectinstellingen \u2192 Script-eigenschappen)', true);
-      } else if (result && !result.ok) {
-        showToast('\u26a0 Fout: ' + (result.error || 'onbekend'), true);
-      } else {
-        showToast('\u26a0 Geen reactie van Apps Script', true);
-      }
-    })
-    .withFailureHandler(function(err) {
-      btn.disabled = false;
-      btn.textContent = 'Verstuur naar Slack \u2192';
-      showToast('\u26a0 Fout: ' + err.message, true);
-    })
-    .sendSlackActions(JSON.stringify({ actions: payload }));
+  fetch('https://api.github.com/repos/' + DISPATCH_REPO + '/actions/workflows/send_slack_actions.yml/dispatches', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + DISPATCH_TOKEN,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ ref: 'main', inputs: { slack_data: JSON.stringify({ actions: payload }) } })
+  }).then(function(r) {
+    btn.disabled = false;
+    btn.textContent = 'Verstuur naar Slack \u2192';
+    if (r.status === 204) {
+      clearActions();
+      showToast('\u2713 Wordt verstuurd naar Slack (ca. 30 seconden)');
+    } else {
+      showToast('\u26a0 GitHub status ' + r.status, true);
+    }
+  }).catch(function(err) {
+    btn.disabled = false;
+    btn.textContent = 'Verstuur naar Slack \u2192';
+    showToast('\u26a0 Fout: ' + err.message, true);
+  });
 }
 
 function showToast(msg, isError = false) {
@@ -965,10 +974,14 @@ def run():
     chartjs = get_chartjs()
     inline_script = f"<script>{chartjs}</script>"
 
+    dispatch_token = os.getenv("DISPATCH_TOKEN", "")
+    dispatch_repo  = os.getenv("GITHUB_REPOSITORY", "kevinhellemons-bit/Workshop-dashboard")
     html = (
         HTML_TEMPLATE
         .replace('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>', inline_script)
         .replace("__DATA__", json.dumps(data, ensure_ascii=False, default=str))
+        .replace("__DISPATCH_TOKEN__", dispatch_token)
+        .replace("__DISPATCH_REPO__", dispatch_repo)
     )
 
     with open(OUT_PATH, "w", encoding="utf-8") as f:
