@@ -86,7 +86,12 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git pull --rebase --autostash origin master || git pull --rebase --autostash origin main
           git add .tmp/workshops.db
-          git diff --staged --quiet || git commit -m "chore: database update $(date +%Y-%m-%d) [skip ci]"
-          git push
+          git diff --staged --quiet && echo "Geen wijzigingen." && exit 0
+          git commit -m "chore: database update $(date +%Y-%m-%d) [skip ci]"
+          for i in 1 2 3; do
+            git push origin HEAD:master && exit 0
+            echo "Push mislukt (poging $i/3), remote ophalen..."
+            git pull --rebase --autostash origin master
+          done
+          exit 1
