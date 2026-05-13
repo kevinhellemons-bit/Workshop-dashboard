@@ -39,9 +39,7 @@ jobs:
 
       - name: Dashboard genereren
         env:
-          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          DISPATCH_REF: ${{ github.ref_name }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
         run: |
           python tools/generate_dashboard.py
           mkdir -p gh-pages

@@ -468,9 +468,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 <script>
 const DATA = __DATA__;
-const DISPATCH_TOKEN = '__DISPATCH_TOKEN__';
-const DISPATCH_REPO  = '__DISPATCH_REPO__';
-const DISPATCH_REF   = '__DISPATCH_REF__';
+const WORKER_URL = '__WORKER_URL__';
 
 document.getElementById('genDate').textContent = DATA.generated_at;
 
@@ -692,14 +690,10 @@ function triggerRefresh() {
   const btn = document.getElementById('refreshBtn');
   btn.disabled = true;
   btn.textContent = 'Bezig\u2026';
-  fetch('https://api.github.com/repos/' + DISPATCH_REPO + '/actions/workflows/daily.yml/dispatches', {
+  fetch(WORKER_URL + '/trigger', {
     method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + DISPATCH_TOKEN,
-      'Accept': 'application/vnd.github+json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ ref: DISPATCH_REF })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
   }).then(function(r) {
     btn.disabled = false;
     btn.innerHTML = '&#8635; Vernieuwen';
@@ -898,14 +892,10 @@ function sendActions() {
   btn.disabled = true;
   btn.textContent = 'Versturen\u2026';
 
-  fetch('https://api.github.com/repos/' + DISPATCH_REPO + '/actions/workflows/send_slack_actions.yml/dispatches', {
+  fetch(WORKER_URL + '/slack', {
     method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + DISPATCH_TOKEN,
-      'Accept': 'application/vnd.github+json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ ref: DISPATCH_REF, inputs: { slack_data: JSON.stringify({ actions: payload }) } })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actions: payload })
   }).then(function(r) {
     btn.disabled = false;
     btn.textContent = 'Verstuur naar Slack \u2192';
@@ -975,15 +965,11 @@ def run():
     chartjs = get_chartjs()
     inline_script = f"<script>{chartjs}</script>"
 
-    dispatch_token = os.getenv("DISPATCH_TOKEN", "")
-    dispatch_repo  = os.getenv("GITHUB_REPOSITORY", "kevinhellemons-bit/Workshop-dashboard")
     html = (
         HTML_TEMPLATE
         .replace('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>', inline_script)
         .replace("__DATA__", json.dumps(data, ensure_ascii=False, default=str))
-        .replace("__DISPATCH_TOKEN__", dispatch_token)
-        .replace("__DISPATCH_REPO__", dispatch_repo)
-        .replace("__DISPATCH_REF__", os.getenv("DISPATCH_REF", "master"))
+        .replace("__WORKER_URL__", os.getenv("WORKER_URL", ""))
     )
 
     with open(OUT_PATH, "w", encoding="utf-8") as f:
