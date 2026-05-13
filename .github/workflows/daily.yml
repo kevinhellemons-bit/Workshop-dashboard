@@ -86,7 +86,7 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git pull --rebase origin master || git pull --rebase origin main
+          git pull --rebase --autostash origin master || git pull --rebase --autostash origin main
           git add .tmp/workshops.db
           git diff --staged --quiet || git commit -m "chore: database update $(date +%Y-%m-%d) [skip ci]"
           git push
